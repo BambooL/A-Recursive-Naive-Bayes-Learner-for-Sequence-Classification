@@ -1,0 +1,7 @@
+To run the code, please make sure that you have these packets
+in python: numpy, sklearn, Queue, math
+
+Run in your terminal: 
+python rnblmb.py filename
+
+filename is [acq, corn, crude, ...]

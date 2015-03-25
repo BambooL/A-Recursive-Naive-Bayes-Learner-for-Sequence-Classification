@@ -1,96 +1,102 @@
+#----------------------------------------------------------------------
+#  RNBL-MB Implementation
+#  Original Paper: Kang, D-K., Silvescu, A. and Honavar, V. (2006).
+#  RNBL-MN: A Recursive Naive Bayes Learner for Sequence Classification. 
+#  In: Proceedings of the Tenth Pacific-Asia Conference on Knowledge 
+#  Discovery and Data Mining (PAKDD 2006). Springer-Verlag Lecture Notes 
+#  in Computer Science Vol 3918, pp. 45-54.
+#  Author: Xiao Liu
+#  College of Information Sciences and Technologies
+#  The Pennsylvania State University
+#  last revised: 24 March 2015
+#----------------------------------------------------------------------
+
 import numpy as np
 import csv
 from sklearn.naive_bayes import MultinomialNB
 from sklearn import cross_validation
 import Queue
 import math
-# class NBnode:
-	
-# 	clf = MultinomialNB()
+import sys
 
-# 	def __init__(self, id, data):
-# 		self.id = id + 1
-# 		self.CDML = getCDML(data)
-# 		self.data = data
-# 		NBnode self.left
-# 		NBnode self.right
-
-	
-# 	def getCDML(data):
-# 		return 1
-
-
-
-
-
-# 	def generateNode(CDML, data):
-# 		CDML_new = getCDML(data)
-# 		if (CDML_new > CDML): 
-# 			NBnode.clf.fit(train, label)
-		
-# 			prediction = NBnode.clf.predict(train)
-
-# 			class1 = instance[prediction="false"]
-# 			class2 = instance[prediction="true"]
-		
-# 			self.left = NBnode(this.id, class1)
-# 			self.right = NBnode(this.id, class2)
-
-
-
-# load data
-
-
-def getCDML(dataset, label):
+#----------------------------------------------------------------------
+# get the CDML for the current node
+def getCDML(train, label, clf):
 
 	global h_size
-	C = 2
-	t = 0
-	f = 0
-	for k in range(len(dataset)):
-		if label[i] == 'false':
-			f ++
-		else:
-			t ++
 
-	for j in range(len(dataset)):
-		if label[j] == 'false':
-			P_cj = f/(f+t)
-		else:
-			P_cj = t/(f+t)
-
-		each = P_cj * 
-
-	CLL = len(dataset) * (LC1 + LC2)
-
-
-
-	return CLL - math.log(len(dataset))/2 * h_size
+	p_ij1 = clf.feature_log_prob_[0]
+	p_ij2 = clf.feature_log_prob_[1]
 
 	
+	s = 0
+	for j in range(len(train)):
+		
+		times1 = 1
+		times2 = 1
+		for i in range(len(p_ij1)):
+			times1 = times1 * math.pow(math.exp(p_ij1[i]), train[j][i])
+			times2 = times2 * math.pow(math.exp(p_ij2[i]), train[j][i])
 
+		if (clf.predict(train[j]) == "false"):
+			A = math.exp(clf.class_log_prior_[0]) * times1
+		else:
+			A = math.exp(clf.class_log_prior_[1]) * times2
+
+		B = math.exp(clf.class_log_prior_[0]) * times1 + math.exp(clf.class_log_prior_[1]) * times2
+
+		if (B != 0):
+			if ((A/B)>0):
+				s = s + math.log(A/B)
+
+	CLL = len(train) * s
+
+	return CLL - math.log(len(train))/2 * (h_size +2)
+
+
+#----------------------------------------------------------------------
+# Multinomial classifier fitted in one node
+# Similar to any decision tree model, two most important values
+# are the split criteria and the stop criteria. Here, the split
+# criteria is that the CDML is larger than previous one and the
+# stop criteria is that each node has at least 1 instance.
 def fit1node(train, label):
 	global prev_CDML
 	global clf_tree 
 	global tree
 	global h_size
-	new_CDML = getCDML(train,label)
+	child1 = []
+	child1_label = []
+	child2 = []
+	child2_label = []
+	
+	clf = MultinomialNB()
 
+# each node has at least 1 instance
+	if (len(train) < 2):
+		clf_tree.append(None)
+		tree.append("#")
+		return child1,child1_label,child2,child2_label
+
+	train = np.array(train,dtype=float)
+
+	clf.fit(train, label)
+	
+	
+	new_CDML = getCDML(train,label,clf)
+
+# Decide whether to split or not
 	if (new_CDML > prev_CDML):
-		clf = MultinomialNB()
-		train = np.array(train,dtype=float)
-		clf.fit(train, label)
 		clf_tree.append(clf)
+
 		tree.append("1")
-		h_size = h_size +1
+		h_size = h_size + 2
+
 		prediction = clf.predict(train)
 
 		prev_CDML = new_CDML
 
-		child1 = []
-		child1_label = []
-		child2 = []
-		child2_label = []
+
 
 		for i in range(len(train)):
 			if (prediction[i] == "false"):
@@ -112,9 +118,21 @@ def fit1node(train, label):
 
 	return child1,child1_label,child2,child2_label
 
-# load data
-csvReader = csv.reader(open('train/acq.csv', 'rb'), delimiter=',')
+
+#----------------------------------------------------------------------
+# Declaration
+global h_size
+global prev_CDML
+global clf_tree 
+global tree
+
+# Load data
+filename = sys.argv[1]
+filename = "train/"+ filename + ".csv"
+csvReader = csv.reader(open(filename, 'rb'), delimiter=',')
 data = list(csvReader)
+
+# Split data to train and test data sets
 train = []
 train_label = []
 test = []
@@ -127,17 +145,25 @@ for i in range(int(len(data)*0.75), len(data)):
 	test.append(data[i][1:])
 	test_label.append(data[i][0])
 
-prev_CDML = 0
+
+#----------------------------------------------------------------------
+# Initial the values: 
+# CDML is a very small number that root node can be generated; 
+# List implement tree
+# h is the value defined in the paper, initial as 1
+prev_CDML = -99999999999
 clf_tree = []
 tree =[]
-h_size = 3
-global h_size
-global prev_CDML
-global clf_tree 
-global tree 
+h_size = 1
 
-# level order construct tree
-# clf_tree = [MultinomialNB(alpha=1.0, class_prior=None, fit_prior=True), MultinomialNB(alpha=1.0, class_prior=None, fit_prior=True), None, MultinomialNB(alpha=1.0, class_prior=None, fit_prior=True), None, None, None]
+
+#----------------------------------------------------------------------
+# level order tree construction
+# use a queue to do level-order traversal, once the CDML
+# of the current node is larger than a previous one, fit
+# the classifier in this node; otherwise, make it a None.
+# output 
+# tree = ['1', '1', '1', '1', '1', '#', '#', '#', '1', '#', '#', '#', '#']
 q = Queue.Queue()
 q.put(train)
 q.put(train_label)
@@ -158,12 +184,22 @@ while (not q.empty()):
 			q.put(l2)
 
 
+print tree
 
 
+# begin test
+# initial the prediction set
 false = []
 false_ground = []
 true = []
 true_ground = []
+
+
+#----------------------------------------------------------------------
+# level-order data splition
+# At begining, the whole dataset is in the root node. The fitted
+# classifier will predict each instance a class and the dataset
+# is splited to two. 
 q = Queue.Queue()
 q.put(test)
 q.put(test_label)
@@ -206,10 +242,16 @@ while (not q.empty() and k < len(clf_tree)):
 			q.put(child2_label)
 			k = k+1
 
-FF = 0
-FT = 0
-TF = 0
-TT = 0
+
+#----------------------------------------------------------------------
+# Result Analysis
+# Confusion matrix construction
+
+FF = 0.0
+FT = 0.0
+TF = 0.0
+TT = 0.0
+
 
 for i in range(len(false_ground[0])):
 	if (false_ground[0][i] != "false"):
@@ -223,37 +265,17 @@ for i in range(len(true_ground[0])):
 	else:
 		TT = TT + 1
 
+# Measurements
+print "Accuracy =" 
+print (TT + FF) /(TT + FF + TF + FT)
+print "Precison ="
+print FF / (FF + FT)
+print "Recall ="
+print FF / (FF + TF)
+print "F-measure ="
+print 2* (FF/(FF + FT)) *(FF / (FF + TF)) / (FF / (FF + TF) + FF / (FF + FT))
 
-print FF
-print FT
-print TF
-print TT
-# print false_ground
-
-
-
-
-
-		
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# cross-validation
-# classifier
+#----------------------------------------------------------------------
 
 
 
